@@ -1,0 +1,94 @@
+model: CWS
+
+# params for path
+data_params:
+
+  data_set: pku
+  cross_domain: true
+  gan: false
+
+  #origin train, dev, test file path
+  origin_path_train: ./data/icwb2-data/training/pku_training.utf8
+  origin_path_dev:
+  origin_path_test: ./data/icwb2-data/gold/msr_test_gold.utf8
+
+  #preprocessed train, dev, test file path
+  path_train: ./data/preprocessed/pku_training.utf8
+  path_dev:
+  path_test: ./data/preprocessed/msr_test_gold.utf8
+  path_train_word: ./data/preprocessed/pku_training_words.utf8
+
+
+  path_test_result: ./data/test_result/msr_test_gold.utf8.output
+
+  #alphabet saving params and path
+  alphabet_params:
+    min_counts: [0,1]
+    path: ./data/alphabet/  # root path
+
+  path_pretrain: ./data/w2v/vec100.txt  # bin or txt
+
+  path_model: ./data/models/model_pku2
+  path_model_active: ./data/models/model_pku_active
+
+  pad: <PAD>
+  oov: <OOV>
+  start: <BOS>
+  end: <EOS>
+
+
+
+
+model_params:
+  create_dev: true
+
+  embed_sizes: 100
+  require_grads: true
+
+  # rnn parameters
+  rnn_type: lstm
+  rnn_layers: 1
+  rnn_units: 150
+  bi_flag: true
+  use_crf: false
+
+  # train parameters
+  dev_size: 0.1
+  batch_size: 20
+  dropout_rate: 0.2
+  learning_rate: 0.01
+  optimizer: adam
+  l2_rate: 0.0
+  lr_decay: 0.05  # only for sgd optimizer
+  momentum: 0.
+  clip: 0.35
+  max_patience: 5
+  nb_epoch: 1000
+  average_batch: true
+
+  use_cuda: true
+
+
+rules:
+  person_name: [江泽民,邓小平,乔石,毛泽东,李岚清]
+  person_path: ./data/rules/name.txt
+
+active_model_params:
+  create_dev: false
+  topK: 10
+
+  # train parameters
+  dev_size: 0.1
+  batch_size: 200
+  dropout_rate: 0.2
+  learning_rate: 0.01
+  optimizer: adam
+  l2_rate: 0.0
+  lr_decay: 0.05  # only for sgd optimizer
+  momentum: 0.
+  clip: 0.35
+  max_patience: 5
+  nb_epoch: 1
+  average_batch: true
+
+  use_cuda: true
