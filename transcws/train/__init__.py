@@ -5,8 +5,10 @@
 
 from .sup_trainer import SupTrainer
 from .active_trainer import ActiveTrainer
+from .finetune import FineTune
 
 __all__ = [
     'SupTrainer',
-    'ActiveTrainer'
+    'ActiveTrainer',
+    'FineTune'
 ]

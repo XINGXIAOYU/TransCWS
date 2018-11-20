@@ -16,7 +16,7 @@ from transcws.utils import *
 from transcws.preprocess import *
 from transcws.nn.modules import SupervisedModel
 from transcws.data import Data_Iter, DataUtil
-from transcws.train import SupTrainer, ActiveTrainer
+from transcws.train import SupTrainer, ActiveTrainer, FineTune
 from transcws.infer import Predictor
 
 
@@ -26,6 +26,7 @@ def parse_opts():
         '-c', '--config', dest='config', type='str', help='配置文件路径')
     op.add_option('--train', dest='train', action='store_true', default=False, help='训练模式')
     op.add_option('--active', dest='active', action='store_true', default=False, help='训练active模型')
+    op.add_option('--finetune', dest='finetune', action='store_true', default=False, help='finetune模型')
     op.add_option('--test', dest='test', action='store_true', default=False, help='测试模式')
     op.add_option(
         '-p', '--preprocess', dest='preprocess', action='store_true', default=False, help='是否进行预处理')
@@ -247,8 +248,8 @@ def preprocessing_exp(configs):
     dataset_dict["words"] = dataset
     dataset_label = file_hdf5.create_dataset('labels', shape=(len(examples),), dtype=dt)
     dataset_dict['labels'] = dataset_label
-    dataset_label = file_hdf5.create_dataset('exp_masks', shape=(len(examples),), dtype=dt)
-    dataset_dict['exp_masks'] = dataset_label
+    dataset_mask = file_hdf5.create_dataset('exp_masks', shape=(len(examples),), dtype=dt)
+    dataset_dict['exp_masks'] = dataset_mask
 
     for i, token_list in enumerate(read_data(examples)):
         tokens = token_list[0]
@@ -267,7 +268,7 @@ def preprocessing_exp(configs):
                     break
                 partial_words = sub_str[0:k]
                 if partial_words in exp_words:
-                    mask[i][j:j + len(partial_words)] = 1
+                    mask[j:j + len(partial_words)] = 1
                     j = j + len(partial_words) - 1
                     break
                 k -= 1
@@ -298,12 +299,14 @@ def train_model(configs):
     model = init_model(configs)
     print(model)
     create_dev = configs['model_params']['create_dev']
+    batch_size = configs['model_params']['batch_size']
+
     if create_dev:
-        data_iter_train, data_iter_dev = init_train_data(configs)
+        data_iter_train, data_iter_dev = init_train_data(configs,create_dev,batch_size)
         model_trainer = init_trainer(configs, data_iter_train,
                                      data_iter_dev, model)
     else:
-        data_iter_train = init_train_data(configs)
+        data_iter_train = init_train_data(configs,create_dev,batch_size)
         model_trainer = init_trainer(configs, data_iter_train,
                                      None, model)
 
@@ -316,18 +319,43 @@ def train_active_model(configs):
     prev_model = load_model(configs)
     print(model)
     create_dev = configs['active_model_params']['create_dev']
+    batch_size = configs['active_model_params']['batch_size']
+
     if create_dev:
-        data_iter_train, data_iter_dev = init_train_data(configs)
+        data_iter_train, data_iter_dev = init_train_data(configs,create_dev,batch_size)
         data_iter_exp = init_example_data(configs)
         model_trainer = init_active_trainer(configs, data_iter_train,
-                                            data_iter_dev, data_iter_exp, model,prev_model)
+                                            data_iter_dev, data_iter_exp, model, prev_model)
     else:
-        data_iter_train = init_train_data(configs)
+        data_iter_train = init_train_data(configs,create_dev,batch_size)
         data_iter_exp = init_example_data(configs)
         model_trainer = init_active_trainer(configs, data_iter_train,
-                                            None, data_iter_exp, model,prev_model)
+                                            None, data_iter_exp, model, prev_model)
 
     model_trainer.fit()
+
+
+def finetune_model(configs):
+    preprocessing_exp(configs)
+    model = load_model(configs)
+    prev_model = load_model(configs)
+    print(model)
+    create_dev = configs['fine_tune_params']['create_dev']
+    batch_size = configs['fine_tune_params']['batch_size']
+
+    if create_dev:
+        data_iter_train, data_iter_dev = init_train_data(configs,create_dev,batch_size)
+        data_iter_exp = init_example_data(configs)
+        model_trainer = init_finetune(configs, data_iter_train,
+                                      data_iter_dev, data_iter_exp, model, prev_model)
+    else:
+        data_iter_train = init_train_data(configs,create_dev,batch_size)
+        data_iter_exp = init_example_data(configs)
+        model_trainer = init_finetune(configs, data_iter_train,
+                                      None, data_iter_exp, model, prev_model)
+
+    model_trainer.fit()
+    model_trainer.get_topK(write2file=True)
 
 
 def init_model(configs):
@@ -369,10 +397,8 @@ def init_model(configs):
     return model
 
 
-def init_train_data(configs):
-    batch_size = configs['model_params']['batch_size']
+def init_train_data(configs,create_dev,batch_size):
     dev_size = configs['model_params']['dev_size']
-    create_dev = configs['model_params']['create_dev']
 
     data_names = ['words', 'labels']
 
@@ -440,7 +466,7 @@ def init_trainer(configs, data_iter_train, data_iter_dev, model):
     return trainer
 
 
-def init_active_trainer(configs, data_iter_train, data_iter_dev, data_iter_exp, model,prev_model):
+def init_active_trainer(configs, data_iter_train, data_iter_dev, data_iter_exp, model, prev_model):
     path_save_model = configs['data_params']['path_model_active']
     check_parent_path(path_save_model)
 
@@ -461,19 +487,62 @@ def init_active_trainer(configs, data_iter_train, data_iter_dev, data_iter_exp, 
 
     if create_dev:
         trainer = ActiveTrainer(data_iter_train=data_iter_train, data_iter_dev=data_iter_dev,
-                                data_iter_exp=data_iter_exp, model=model,prev_model=prev_model,
+                                data_iter_exp=data_iter_exp, model=model, prev_model=prev_model,
                                 learning_rate=learning_rate, l2_rate=l2_rate, momentum=momentum, lr_decay=lr_decay,
                                 clip=clip,
                                 path_save_model=path_save_model, nb_epoch=nb_epoch,
                                 max_patience=max_patience, has_dev=True, rules=rules,
                                 topK=topK)
     else:
-        trainer = ActiveTrainer(data_iter_train=data_iter_train, data_iter_exp=data_iter_exp, model=model,prev_model=prev_model,
+        trainer = ActiveTrainer(data_iter_train=data_iter_train, data_iter_exp=data_iter_exp, model=model,
+                                prev_model=prev_model,
                                 learning_rate=learning_rate, l2_rate=l2_rate, momentum=momentum, lr_decay=lr_decay,
                                 clip=clip,
                                 path_save_model=path_save_model, nb_epoch=nb_epoch,
                                 max_patience=max_patience, has_dev=False, rules=rules,
                                 topK=topK)
+    return trainer
+
+
+def init_finetune(configs, data_iter_train, data_iter_dev, data_iter_exp, model, prev_model):
+    path_save_model = configs['data_params']['path_model_active']
+    check_parent_path(path_save_model)
+
+    nb_epoch = configs['fine_tune_params']['nb_epoch']
+    max_patience = configs['fine_tune_params']['max_patience']
+
+    learning_rate = configs['fine_tune_params']['learning_rate']
+    l2_rate = configs['fine_tune_params']['l2_rate']
+    momentum = configs['fine_tune_params']['momentum']
+    lr_decay = configs['fine_tune_params']['lr_decay']
+    clip = configs['fine_tune_params']['clip']
+
+    create_dev = configs['fine_tune_params']['create_dev']
+
+    topK = configs['fine_tune_params']['topK']
+    # threshold = configs['fine_tune_params']['threshold']
+    loss_threshold = configs['fine_tune_params']['loss_threshold']
+
+    path_result =configs['fine_tune_params']['path_result']
+    path_train = configs['data_params']['path_train']
+
+
+    if create_dev:
+        trainer = FineTune(data_iter_train=data_iter_train, data_iter_dev=data_iter_dev,
+                           data_iter_exp=data_iter_exp, model=model, prev_model=prev_model,
+                           learning_rate=learning_rate, l2_rate=l2_rate, momentum=momentum, lr_decay=lr_decay,
+                           clip=clip,
+                           path_save_model=path_save_model, nb_epoch=nb_epoch,
+                           max_patience=max_patience, has_dev=True,
+                           topK=topK, loss_threshold=loss_threshold,path_result=path_result,path_train=path_train)
+    else:
+        trainer = FineTune(data_iter_train=data_iter_train, data_iter_exp=data_iter_exp, model=model,
+                           prev_model=prev_model,
+                           learning_rate=learning_rate, l2_rate=l2_rate, momentum=momentum, lr_decay=lr_decay,
+                           clip=clip,
+                           path_save_model=path_save_model, nb_epoch=nb_epoch,
+                           max_patience=max_patience, has_dev=False,
+                           topK=topK, loss_threshold=loss_threshold,path_result=path_result,path_train=path_train)
     return trainer
 
 
@@ -534,7 +603,7 @@ def init_test_data(configs):
 def init_example_data(configs):
     path_example = configs['rules']['person_path']
     path_data = path_example + '.hdf5'
-    data_names = ['words', 'labels','exp_masks']
+    data_names = ['words', 'labels', 'exp_masks']
     exp_object_ = h5py.File(path_data, 'r')
     exp_object = dict()
     for data_name in data_names:
@@ -561,7 +630,7 @@ def load_model(configs):
 
 
 def main():
-    os.environ["CUDA_VISIBLE_DEVICES"] = "6"
+    os.environ["CUDA_VISIBLE_DEVICES"] = "3"
 
     opts = parse_opts()
     configs = yaml.load(codecs.open(opts.config, encoding='utf-8'))
@@ -581,6 +650,8 @@ def main():
         test_model(configs)
     if opts.trainword:
         train_word_dict(configs)
+    if opts.finetune:
+        finetune_model(configs)
 
 
 if __name__ == '__main__':

@@ -10,6 +10,14 @@
           <option name="port" value="22" />
         </fileTransfer>
       </webServer>
+      <webServer id="dfaa11c4-18f1-40a5-a8aa-5d8b3a1978c6" name=".39" url="http://10.141.209.39">
+        <fileTransfer host="10.141.209.39" port="22" rootFolder="/home/xyxing/workspace" accessType="SFTP">
+          <advancedOptions>
+            <advancedOptions dataProtectionLevel="Private" />
+          </advancedOptions>
+          <option name="port" value="22" />
+        </fileTransfer>
+      </webServer>
     </option>
   </component>
 </project>

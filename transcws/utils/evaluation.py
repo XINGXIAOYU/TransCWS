@@ -39,8 +39,7 @@ def evaluation_BMES(labels_gold, labels_pred, label2id_dict, percentage=True):
     return p, r, f1
 
 
-
-def evaluation_01(labels_gold, labels_pred,percentage=True):
+def evaluation_01(labels_gold, labels_pred, percentage=True):
     tp = 0
     np_ = 0
     pp = 0
@@ -64,7 +63,7 @@ def evaluation_01(labels_gold, labels_pred,percentage=True):
                 start = j + 1
 
     p = float(tp) / float(pp) if tp > 0 and pp > 0 else 0
-    r = float(tp) / float(np_) if tp > 0 and pp > 0else 0
+    r = float(tp) / float(np_) if tp > 0 and pp > 0 else 0
     f1 = 2 * p * r / (p + r) if (p + r) > 0 else 0
     if percentage:
         p *= 100

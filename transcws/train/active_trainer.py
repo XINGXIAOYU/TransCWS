@@ -17,6 +17,7 @@ import torch.nn.functional as F
 
 
 class ActiveTrainer(object):
+    ## TODO
     def __init__(self, **kwargs):
         """
         data_iter_train

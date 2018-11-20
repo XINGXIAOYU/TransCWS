@@ -70,7 +70,7 @@ model_params:
 
 
 rules:
-  person_name: [江泽民,邓小平,乔石,毛泽东,李岚清]
+  person_name: [江泽民,刘波,毛泽东]
   person_path: ./data/rules/name.txt
 
 active_model_params:
@@ -79,7 +79,7 @@ active_model_params:
 
   # train parameters
   dev_size: 0.1
-  batch_size: 200
+  batch_size: 50
   dropout_rate: 0.2
   learning_rate: 0.01
   optimizer: adam
@@ -89,6 +89,26 @@ active_model_params:
   clip: 0.35
   max_patience: 5
   nb_epoch: 1
-  average_batch: true
 
   use_cuda: true
+
+fine_tune_params:
+  create_dev: false
+  topK: 50
+
+  # train parameters
+  dev_size: 0.1
+  batch_size: 50
+  dropout_rate: 0.2
+  learning_rate: 0.01
+  optimizer: adam
+  l2_rate: 0.0
+  lr_decay: 0.05  # only for sgd optimizer
+  momentum: 0.
+  clip: 0.35
+  max_patience: 5
+  nb_epoch: 1000
+  loss_threshold: 1.0e-1 # lower than this than fit stop
+
+  use_cuda: true
+  path_result: ./data/test_result/finetune_name.utf8.output
